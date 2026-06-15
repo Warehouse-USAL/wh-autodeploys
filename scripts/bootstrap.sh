@@ -36,6 +36,7 @@ clone Dashboard
 # 4. Per-repo self-hosted runners (one each), installed as services
 register() { # $1=repo  $2=registration token
   local d="$ROOT/runners/$1"
+  if [ "$2" = "SKIP" ] || [ -z "$2" ]; then echo "[$1] runner skipped (no token)"; return; fi
   if [ -f "$d/.runner" ]; then echo "[$1] runner already registered"; return; fi
   mkdir -p "$d"
   ( cd "$d"

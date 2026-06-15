@@ -27,12 +27,24 @@ workflow on a self-hosted runner).
 
 ## Bring up a fresh box
 
+**Guided (recommended)** — prompts for everything, sets it all up, prints your URLs:
+
 ```bash
-GHCR_USER=... GHCR_PAT=... RUNNER_TOKEN_BACKEND=... RUNNER_TOKEN_DASHBOARD=... \
-  ./scripts/bootstrap.sh
-# then create /opt/wh/{wh-backend,Dashboard}/.env and:
-make reconcile
+curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/main/scripts/init.sh | bash
 ```
 
-See `.env.example` for the required variables. Full design + implementation plan
-in `docs/`.
+You can pre-set any prompt as an env var to run it unattended (e.g. over SSH):
+
+```bash
+GHCR_USER=... GHCR_PAT=... RUNNER_TOKEN_BACKEND=... \
+JWT_SECRET=... SPRING_DATA_MONGODB_URI=... MONGO_ROOT_USER=... MONGO_ROOT_PASSWORD=... \
+  ./scripts/init.sh
+```
+
+Leave `RUNNER_TOKEN_DASHBOARD` unset to set up the backend only (e.g. before the
+Dashboard image exists in GHCR).
+
+**Low-level** — `scripts/bootstrap.sh` does the box plumbing (Docker, runners,
+proxy, boot unit) without prompts or `.env`/bring-up; `init.sh` wraps it.
+
+See `.env.example` for the variables. Full design + implementation plan in `docs/`.
