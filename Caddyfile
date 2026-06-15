@@ -10,7 +10,12 @@
 	# If the backend serves under a /api context-path, change `handle_path`
 	# to `handle` (which does NOT strip the prefix).
 	handle_path /api/* {
-		reverse_proxy backend:8080
+		reverse_proxy backend:8080 {
+			# /api is stripped before proxying, so tell the backend its public
+			# prefix — Spring (forward-headers-strategy=framework) + springdoc use
+			# this to build correct swagger / api-docs URLs.
+			header_up X-Forwarded-Prefix /api
+		}
 	}
 
 	# Everything else → dashboard.
