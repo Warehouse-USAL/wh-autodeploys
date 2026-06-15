@@ -1,34 +1,43 @@
 #!/usr/bin/env bash
 # Converge each app repo on the box to its latest published release tag.
-# Runs on boot (via wh-reconcile.service) and on demand (`make reconcile`).
-# This is the safety net for outages longer than the runner's job-queue window.
+# Runs in the `reconcile` container on a loop (see docker-compose.yml). It is
+# the state-driven safety net: it clones repos that are missing, brings the full
+# stack up on first boot, and catches up after long power-offs or drift — the
+# cases the runners' event queue does not cover.
 set -euo pipefail
 
 ROOT="${WH_ROOT:-/opt/wh}"
+ORG="${GH_OWNER:-Warehouse-USAL}"
 APPS=(wh-backend Dashboard)
+
+# GHCR login so `docker compose pull` can fetch private images outside Actions.
+if [ -n "${GHCR_PAT:-}" ]; then
+  echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USER:-$ORG}" --password-stdin >/dev/null 2>&1 \
+    || echo "! GHCR login failed (private images may not pull)"
+fi
 
 for repo in "${APPS[@]}"; do
   dir="$ROOT/$repo"
+
   if [ ! -d "$dir/.git" ]; then
-    echo "[$repo] skip — not cloned at $dir"
-    continue
+    echo "[$repo] cloning…"
+    git clone "https://github.com/$ORG/$repo.git" "$dir" || { echo "[$repo] clone failed"; continue; }
   fi
 
   git -C "$dir" fetch --tags --force origin
-
   latest=$(git -C "$dir" tag -l 'v*' | sort -V | tail -1)
-  if [ -z "$latest" ]; then
-    echo "[$repo] skip — no version tags yet"
-    continue
-  fi
+  if [ -z "$latest" ]; then echo "[$repo] no version tags yet"; continue; fi
 
   current=$(git -C "$dir" describe --tags --exact-match 2>/dev/null || echo "none")
-  if [ "$current" = "$latest" ]; then
-    echo "[$repo] already at $latest"
+  if [ "$current" = "$latest" ]; then echo "[$repo] already at $latest"; continue; fi
+
+  if [ ! -f "$dir/.env" ]; then
+    echo "[$repo] $latest available but $dir/.env is missing — configure it (cp .env.example .env) to deploy"
     continue
   fi
 
   echo "[$repo] $current -> $latest"
   git -C "$dir" checkout "$latest"
-  make -C "$dir" deploy
+  make -C "$dir" up-prod   # ensure the full stack (incl. data services) is up; pulls on first boot
+  make -C "$dir" deploy    # pull the newest app image + restart the app service
 done

@@ -1,59 +1,54 @@
 # wh-autodeploys
 
-Deployment infrastructure for the Warehouse-USAL system. This repo owns **how
-the box reaches services and how it recovers** — not the app deploys themselves
-(each app repo deploys itself via its own `make deploy` + `release`-triggered
-workflow on a self-hosted runner).
+Deployment infrastructure for the Warehouse-USAL system, **as containers**. The
+only thing installed on the host is the Docker engine — runners, reverse proxy,
+and the reconcile safety net all run as containers from this one compose file.
 
-## What's here
+This repo owns *how the box reaches services and how it recovers*. Each app repo
+deploys itself (its own `make deploy` + `release`-triggered workflow that runs on
+a self-hosted runner here).
 
-| File | Purpose |
+## Components (all containers)
+
+| Service | Purpose |
 |---|---|
-| `docker-compose.yml` + `Caddyfile` | Caddy reverse proxy — the **single exposed port** (:80) routing `/api/*` → backend, `/` → dashboard. |
-| `scripts/bootstrap.sh` | One-command setup for a fresh box (Docker, GHCR login, runners, proxy, boot unit). |
-| `scripts/reconcile.sh` | Converge each app repo to its latest release. The safety net for long outages. |
-| `systemd/wh-reconcile.service` | Runs `reconcile.sh` once on boot. |
+| `caddy` | Reverse proxy — the **single exposed port** (:80), `/api/*` → backend, `/` → dashboard. |
+| `runner-backend` / `runner-dashboard` | Self-hosted GitHub Actions runners. Self-register from a PAT, long-poll GitHub **outbound**, and deploy via the host Docker daemon (docker.sock mounted). |
+| `reconcile` | Clones missing app repos and, on a loop, converges each to its latest release. Safety net for first boot, long power-offs, and drift. |
 
-## How it works
-
-1. CI in each app repo builds an image and pushes it to GHCR on a stable release.
-2. `release: published` triggers that repo's `deploy.yml` on a **self-hosted
-   runner** running on this box (the runner long-polls GitHub outbound — the box
-   never accepts inbound connections).
-3. The runner runs `make deploy` → `docker compose pull && up -d <service>`,
-   recreating only that service.
-4. If the box was powered off and missed releases, `wh-reconcile.service` brings
-   it to the latest release on next boot.
+The runners use **Docker-out-of-Docker**: they mount `/var/run/docker.sock` and
+`/opt/wh` (same path host↔container) so the containers they deploy are siblings
+on the host, not nested.
 
 ## Bring up a fresh box
 
-**Guided (recommended)** — prompts for everything, sets it all up, prints your URLs:
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/main/scripts/init.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/master/scripts/init.sh | bash
+# fills in /opt/wh/wh-autodeploys/.env on first run — set GH_OWNER + GH_PAT, re-run
 ```
 
-You can pre-set any prompt as an env var to run it unattended (e.g. over SSH):
+Then it's just `docker compose up -d --build` (which `init.sh` runs for you).
+See `.env.example` for the infra secrets (just `GH_OWNER` + a `GH_PAT` with
+`repo` + `read:packages`).
 
-```bash
-GHCR_USER=... GHCR_PAT=... RUNNER_TOKEN_BACKEND=...  ./scripts/init.sh
-```
-
-Leave `RUNNER_TOKEN_DASHBOARD` unset to set up the backend only (e.g. before the
-Dashboard image exists in GHCR).
-
-**App config is separate.** This repo only handles infra. Each app's runtime
-config lives in its own `.env`, copied from the repo's shipped `.env.example`:
+**App config is separate.** Each app's runtime config lives in its own `.env`,
+copied from the repo's shipped `.env.example`:
 
 ```bash
 cp /opt/wh/wh-backend/.env.example /opt/wh/wh-backend/.env   # Mongo URI, JWT, ...
 cp /opt/wh/Dashboard/.env.example  /opt/wh/Dashboard/.env    # BACKEND_URL=/api
 ```
 
-`init.sh` brings up each app only once its `.env` exists, and tells you if one
-is missing.
+## How a deploy flows
 
-**Low-level** — `scripts/bootstrap.sh` does the box plumbing (Docker, runners,
-proxy, boot unit) without prompts or `.env`/bring-up; `init.sh` wraps it.
+1. App CI builds an image, pushes it to GHCR on a stable release.
+2. `release: published` → that repo's `deploy.yml` runs on its runner container here.
+3. The job logs into GHCR and runs `make deploy` → `docker compose pull && up -d <svc>`
+   against the host daemon, recreating only that service.
+4. If the box was off and missed releases, `reconcile` converges it on next boot.
 
-See `.env.example` for the variables. Full design + implementation plan in `docs/`.
+## Security note
+
+The runners mount the Docker socket — that's root-equivalent access to the host.
+Acceptable for a private, single-team box; tighten later with a socket proxy if
+this goes multi-tenant.

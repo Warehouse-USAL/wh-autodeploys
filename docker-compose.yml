@@ -1,3 +1,12 @@
+# The entire deployment box, as containers. The only thing on the host is the
+# Docker engine itself. Runners drive the host daemon via Docker-out-of-Docker
+# (the docker.sock + /opt/wh mounts), so the services they deploy are siblings
+# on the host, not nested.
+#
+#   docker compose up -d --build
+#
+# Secrets come from a gitignored .env (see .env.example).
+
 services:
   caddy:
     image: caddy:2
@@ -11,9 +20,54 @@ services:
       - wh-proxy
     restart: always
 
+  runner-backend:
+    build: ./runner
+    environment:
+      RUNNER_SCOPE: repo
+      REPO_URL: https://github.com/${GH_OWNER:?set GH_OWNER}/wh-backend
+      ACCESS_TOKEN: ${GH_PAT:?set GH_PAT}      # PAT (repo) — self-registers on start
+      RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-backend
+      LABELS: ${RUNNER_LABELS:-prod}
+      RUNNER_WORKDIR: /opt/wh/_work/wh-backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/wh:/opt/wh
+    restart: always
+
+  runner-dashboard:
+    build: ./runner
+    environment:
+      RUNNER_SCOPE: repo
+      REPO_URL: https://github.com/${GH_OWNER:?set GH_OWNER}/Dashboard
+      ACCESS_TOKEN: ${GH_PAT:?set GH_PAT}
+      RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-dashboard
+      LABELS: ${RUNNER_LABELS:-prod}
+      RUNNER_WORKDIR: /opt/wh/_work/Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/wh:/opt/wh
+    restart: always
+
+  # State-driven safety net: clones missing app repos, then on a loop converges
+  # each to its latest release. Covers first boot, long power-offs, and drift.
+  reconcile:
+    build: ./runner
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      while true; do /opt/wh/wh-autodeploys/scripts/reconcile.sh || true;
+      sleep ${RECONCILE_INTERVAL:-300}; done
+    environment:
+      GH_OWNER: ${GH_OWNER:?set GH_OWNER}
+      GHCR_USER: ${GHCR_USER:-${GH_OWNER}}
+      GHCR_PAT: ${GH_PAT:?set GH_PAT}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/wh:/opt/wh
+    restart: always
+
 networks:
   wh-proxy:
-    external: true
+    name: wh-proxy
 
 volumes:
   caddy_data:
