@@ -36,13 +36,22 @@ curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/main/
 You can pre-set any prompt as an env var to run it unattended (e.g. over SSH):
 
 ```bash
-GHCR_USER=... GHCR_PAT=... RUNNER_TOKEN_BACKEND=... \
-JWT_SECRET=... SPRING_DATA_MONGODB_URI=... MONGO_ROOT_USER=... MONGO_ROOT_PASSWORD=... \
-  ./scripts/init.sh
+GHCR_USER=... GHCR_PAT=... RUNNER_TOKEN_BACKEND=...  ./scripts/init.sh
 ```
 
 Leave `RUNNER_TOKEN_DASHBOARD` unset to set up the backend only (e.g. before the
 Dashboard image exists in GHCR).
+
+**App config is separate.** This repo only handles infra. Each app's runtime
+config lives in its own `.env`, copied from the repo's shipped `.env.example`:
+
+```bash
+cp /opt/wh/wh-backend/.env.example /opt/wh/wh-backend/.env   # Mongo URI, JWT, ...
+cp /opt/wh/Dashboard/.env.example  /opt/wh/Dashboard/.env    # BACKEND_URL=/api
+```
+
+`init.sh` brings up each app only once its `.env` exists, and tells you if one
+is missing.
 
 **Low-level** — `scripts/bootstrap.sh` does the box plumbing (Docker, runners,
 proxy, boot unit) without prompts or `.env`/bring-up; `init.sh` wraps it.
