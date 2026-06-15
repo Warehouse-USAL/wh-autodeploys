@@ -25,8 +25,13 @@ for repo in "${APPS[@]}"; do
   fi
 
   git -C "$dir" fetch --tags --force origin
-  latest=$(git -C "$dir" tag -l 'v*' | sort -V | tail -1)
-  if [ -z "$latest" ]; then echo "[$repo] no version tags yet"; continue; fi
+  # Canonical "latest release" from the GitHub API — NOT a tag glob/sort, since
+  # the repo's release tags aren't strictly sortable (e.g. v2026-05-28 vs vsuperadmin).
+  latest=$(curl -fsS -H "Authorization: Bearer ${GHCR_PAT:-}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$ORG/$repo/releases/latest" 2>/dev/null \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+  if [ -z "$latest" ]; then echo "[$repo] no published release yet"; continue; fi
 
   current=$(git -C "$dir" describe --tags --exact-match 2>/dev/null || echo "none")
   if [ "$current" = "$latest" ]; then echo "[$repo] already at $latest"; continue; fi
