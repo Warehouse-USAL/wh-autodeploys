@@ -66,8 +66,9 @@ services:
     restart: always
 
 networks:
+  # Shared with the app compose projects; created by init.sh, not owned here.
   wh-proxy:
-    name: wh-proxy
+    external: true
 
 volumes:
   caddy_data:

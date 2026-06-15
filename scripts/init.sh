@@ -28,6 +28,7 @@ if [ ! -f .env ]; then
 fi
 
 # 4. Bring up caddy + the two runners + reconcile
+docker network create wh-proxy 2>/dev/null || true
 docker compose up -d --build
 
 ip=$(hostname -I 2>/dev/null | awk '{print $1}'); ip="${ip:-<box-ip>}"
