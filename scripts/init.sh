@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
-# Guided, one-command setup for a fresh box. Run it and answer the prompts —
-# or pre-set any value as an env var to skip that prompt (handy for automation
-# over SSH). Safe to re-run: existing .env files and registered runners are left
-# in place unless you delete them first.
+# Guided, one-command setup for a fresh deployment box.
+#
+# Scope: INFRA ONLY — Docker, the shared network, GHCR login, repo clones,
+# self-hosted runners, the reverse proxy, and the reconcile-on-boot unit.
+# It prompts for exactly two kinds of secret that belong to *this* layer:
+#   - GHCR pull credentials
+#   - runner registration tokens
+#
+# App runtime config (Mongo URI, JWT secret, BACKEND_URL, ...) is NOT handled
+# here. Each app repo ships its own `.env.example`; you copy it to `.env` in the
+# app's clone and fill it in. This script will tell you when one is missing.
+#
+# Any prompt can be pre-set as an env var to run unattended (e.g. over SSH).
 #
 #   curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/main/scripts/init.sh | bash
 #   # or, from a clone:  ./scripts/init.sh
@@ -15,20 +24,17 @@ bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '\033[32m✓\033[0m %s\n' "$1"; }
 warn() { printf '\033[33m!\033[0m %s\n' "$1"; }
 
-# ── input helpers: use env var if set, else prompt ───────────────────────────
 ask() {  # var, prompt
-  local cur="${!1:-}"
-  if [ -n "$cur" ]; then return; fi
+  [ -n "${!1:-}" ] && return
   read -rp "  $2: " "$1"
 }
 ask_secret() {  # var, prompt
-  local cur="${!1:-}"
-  if [ -n "$cur" ]; then return; fi
+  [ -n "${!1:-}" ] && return
   read -rsp "  $2: " "$1"; echo
 }
 require() { [ -n "${!1:-}" ] || { echo "ERROR: $1 is required"; exit 1; }; }
 
-bold "Warehouse-USAL — deployment box setup"
+bold "Warehouse-USAL — deployment box setup (infra)"
 echo
 
 # ── 0. sanity checks ─────────────────────────────────────────────────────────
@@ -39,30 +45,17 @@ if [ "$arch" != "x86_64" ]; then
 fi
 sudo -n true 2>/dev/null || warn "sudo may prompt for a password during setup."
 
-# ── 1. gather inputs ─────────────────────────────────────────────────────────
-bold "1/5  Credentials"
+# ── 1. infra credentials (the ONLY secrets this layer owns) ──────────────────
+bold "1/3  Infra credentials"
 ask        GHCR_USER             "GitHub username (for GHCR)"
 ask_secret GHCR_PAT              "GHCR token (PAT with read:packages)"
 ask_secret RUNNER_TOKEN_BACKEND  "wh-backend runner registration token"
 ask_secret RUNNER_TOKEN_DASHBOARD "Dashboard runner registration token (blank to skip Dashboard)"
 require GHCR_USER; require GHCR_PAT; require RUNNER_TOKEN_BACKEND
 
-bold "2/5  Backend runtime secrets"
-ask_secret SPRING_DATA_MONGODB_URI "MongoDB URI (mongodb://user:pass@mongodb:27017/smartwarehouse?authSource=admin)"
-ask_secret JWT_SECRET              "JWT secret (32+ chars)"
-ask        MONGO_ROOT_USER         "Mongo root user"
-ask_secret MONGO_ROOT_PASSWORD     "Mongo root password"
-REDPANDA_BOOTSTRAP_SERVERS="${REDPANDA_BOOTSTRAP_SERVERS:-redpanda:9092}"
-JWT_EXPIRATION_MS="${JWT_EXPIRATION_MS:-86400000}"
-BACKEND_URL="${BACKEND_URL:-/api}"
-require SPRING_DATA_MONGODB_URI; require JWT_SECRET
-require MONGO_ROOT_USER; require MONGO_ROOT_PASSWORD
-
-# ── 2. base box setup (Docker, network, GHCR, clones, runners, proxy, unit) ──
-bold "3/5  Bootstrapping box (Docker, runners, proxy)"
+# ── 2. box plumbing (Docker, network, GHCR, clones, runners, proxy, unit) ────
+bold "2/3  Bootstrapping box (Docker, runners, proxy)"
 export GHCR_USER GHCR_PAT RUNNER_TOKEN_BACKEND
-# bootstrap requires a Dashboard token; provide a placeholder if skipping so it
-# doesn't abort, then we just won't bring the dashboard up.
 export RUNNER_TOKEN_DASHBOARD="${RUNNER_TOKEN_DASHBOARD:-SKIP}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/bootstrap.sh" ]; then
@@ -73,44 +66,37 @@ else
     git clone "https://github.com/$ORG/$SELF_REPO.git" "$ROOT/$SELF_REPO"; }
   WH_ROOT="$ROOT" "$ROOT/$SELF_REPO/scripts/bootstrap.sh"
 fi
-ok "Box bootstrapped"
+ok "Box bootstrapped (runners registered, proxy up)"
 
-# ── 3. write per-app .env files (skip if present) ────────────────────────────
-bold "4/5  Writing app .env files"
-write_env() {  # dir, heredoc-content via stdin
-  if [ -f "$1/.env" ]; then warn "$1/.env exists — leaving as-is"; return; fi
-  cat > "$1/.env"; ok "wrote $1/.env"
+# ── 3. bring up each app IF the operator has configured its .env ─────────────
+# App config lives in each repo's own .env (copied from its .env.example).
+bold "3/3  Starting services"
+bring_up() {  # repo, friendly-name
+  local dir="$ROOT/$1"
+  if [ ! -f "$dir/.env" ]; then
+    warn "$1 not started — missing $dir/.env"
+    echo "      Configure it:  cp $dir/.env.example $dir/.env  &&  \$EDITOR $dir/.env"
+    return 1
+  fi
+  make -C "$dir" up-prod && ok "$2 up"
 }
-write_env "$ROOT/wh-backend" <<EOF
-SPRING_DATA_MONGODB_URI=$SPRING_DATA_MONGODB_URI
-REDPANDA_BOOTSTRAP_SERVERS=$REDPANDA_BOOTSTRAP_SERVERS
-JWT_SECRET=$JWT_SECRET
-JWT_EXPIRATION_MS=$JWT_EXPIRATION_MS
-MONGO_ROOT_USER=$MONGO_ROOT_USER
-MONGO_ROOT_PASSWORD=$MONGO_ROOT_PASSWORD
-EOF
-write_env "$ROOT/Dashboard" <<EOF
-BACKEND_URL=$BACKEND_URL
-EOF
 
-# ── 4. initial bring-up ──────────────────────────────────────────────────────
-bold "5/5  Starting services"
-make -C "$ROOT/wh-backend" up-prod
-ok "backend + data services up"
+bring_up wh-backend "backend + data services" || true
 
-if docker pull "ghcr.io/$(echo "$ORG" | tr '[:upper:]' '[:lower:]')/dashboard:latest" >/dev/null 2>&1; then
-  make -C "$ROOT/Dashboard" up-prod
-  ok "dashboard up"
+if [ "$RUNNER_TOKEN_DASHBOARD" = SKIP ]; then
+  warn "Dashboard skipped (no runner token provided)."
+elif ! docker pull "ghcr.io/$(echo "$ORG" | tr '[:upper:]' '[:lower:]')/dashboard:latest" >/dev/null 2>&1; then
+  warn "Dashboard image not in GHCR yet — skipping. (Merge + release feature/gitflow-dockerization, then: make -C $ROOT/Dashboard up-prod)"
 else
-  warn "Dashboard image not found in GHCR — skipping. (Merge feature/gitflow-dockerization and release it, then run: make -C $ROOT/Dashboard up-prod)"
+  bring_up Dashboard "dashboard" || true
 fi
 
-# ── done: print URLs ─────────────────────────────────────────────────────────
+# ── done ─────────────────────────────────────────────────────────────────────
 ip=$(hostname -I 2>/dev/null | awk '{print $1}'); ip="${ip:-<box-ip>}"
 echo
 bold "Done."
 echo "  Dashboard : http://$ip/"
 echo "  API       : http://$ip/api/"
 echo
-echo "  Runners are registered and Idle; a stable release now deploys automatically."
+echo "  Runners are registered; a stable release now deploys automatically."
 echo "  Verify locally:  curl -fsS http://localhost/   &&   curl -fsS http://localhost/api/"
