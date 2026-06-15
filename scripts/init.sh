@@ -9,8 +9,17 @@ set -euo pipefail
 ORG=Warehouse-USAL
 ROOT="${WH_ROOT:-/opt/wh}"
 
-# 1. Docker engine (the one bare-metal dependency)
+# 1. Host dependencies: Docker engine, the compose plugin, and make.
 command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
+# compose plugin (docker.io packages sometimes ship without it)
+docker compose version >/dev/null 2>&1 || {
+  sudo mkdir -p /usr/local/lib/docker/cli-plugins
+  sudo curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+}
+# make (used by this ops Makefile on the host)
+command -v make >/dev/null || sudo apt-get install -y make 2>/dev/null || true
 
 # 2. Clone this repo to its stable path
 sudo mkdir -p "$ROOT" && sudo chown "$USER" "$ROOT"
