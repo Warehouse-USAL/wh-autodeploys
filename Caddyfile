@@ -1,0 +1,20 @@
+# Single exposed port (:80) fronting every service.
+# Caddy reaches each container by its compose service name over the shared
+# external `wh-proxy` network — no other service needs a host port.
+#
+# When you expose this publicly later, replace `:80` with your domain
+# (e.g. `warehouse.usal.edu`) and Caddy fetches + renews TLS automatically.
+
+:80 {
+	# API → backend. handle_path strips the /api prefix, so /api/auth → /auth.
+	# If the backend serves under a /api context-path, change `handle_path`
+	# to `handle` (which does NOT strip the prefix).
+	handle_path /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Everything else → dashboard.
+	handle {
+		reverse_proxy dashboard:80
+	}
+}

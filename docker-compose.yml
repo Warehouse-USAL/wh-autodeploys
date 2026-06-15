@@ -1,0 +1,20 @@
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - wh-proxy
+    restart: always
+
+networks:
+  wh-proxy:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:
