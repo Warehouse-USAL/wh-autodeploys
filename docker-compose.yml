@@ -48,6 +48,20 @@ services:
       - /opt/wh:/opt/wh
     restart: always
 
+  runner-webapp:
+    build: ./runner
+    environment:
+      RUNNER_SCOPE: repo
+      REPO_URL: https://github.com/${GH_OWNER:?set GH_OWNER}/smarthouse_webapp
+      ACCESS_TOKEN: ${GH_PAT:?set GH_PAT}
+      RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-webapp
+      LABELS: ${RUNNER_LABELS:-prod}
+      RUNNER_WORKDIR: /opt/wh/_work/smarthouse_webapp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/wh:/opt/wh
+    restart: always
+
   # State-driven safety net: clones missing app repos, then on a loop converges
   # each to its latest release. Covers first boot, long power-offs, and drift.
   reconcile:

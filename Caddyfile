@@ -2,24 +2,34 @@
 # Caddy reaches each container by its compose service name over the shared
 # external `wh-proxy` network — no other service needs a host port.
 #
+# Routing:
+#   /app/*        -> web app   (smarthouse_webapp)
+#   /dashboard/*  -> dashboard
+#   everything else (/auth, /products, /ws, /actuator, /, ...) -> backend
+#
+# The two SPAs are served under a path prefix, which Caddy strips (handle_path)
+# before proxying. Each SPA is BUILT with a matching base (vite base '/app/' and
+# '/dashboard/'), so its own asset URLs come back as /app/assets/* — which route
+# here and survive the strip. The backend owns root, so the SPAs' bare API calls
+# (/auth, /products, /ws, ...) reach it with no /api prefix or header rewriting.
+#
 # When you expose this publicly later, replace `:80` with your domain
 # (e.g. `warehouse.usal.edu`) and Caddy fetches + renews TLS automatically.
 
 :80 {
-	# API → backend. handle_path strips the /api prefix, so /api/auth → /auth.
-	# If the backend serves under a /api context-path, change `handle_path`
-	# to `handle` (which does NOT strip the prefix).
-	handle_path /api/* {
-		reverse_proxy backend:8080 {
-			# /api is stripped before proxying, so tell the backend its public
-			# prefix — Spring (forward-headers-strategy=framework) + springdoc use
-			# this to build correct swagger / api-docs URLs.
-			header_up X-Forwarded-Prefix /api
-		}
+	# Web app under /app — prefix stripped; SPA built with base '/app/'.
+	handle_path /app/* {
+		reverse_proxy webapp:80
 	}
 
-	# Everything else → dashboard.
-	handle {
+	# Dashboard under /dashboard — prefix stripped; SPA built with base '/dashboard/'.
+	handle_path /dashboard/* {
 		reverse_proxy dashboard:80
+	}
+
+	# Everything else → the backend at root. Catches the frontends' bare API
+	# calls and the API itself. WebSocket upgrades (/ws) are handled automatically.
+	handle {
+		reverse_proxy backend:8080
 	}
 }
