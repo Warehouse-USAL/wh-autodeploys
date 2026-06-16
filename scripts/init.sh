@@ -3,11 +3,26 @@
 # host install is the Docker engine. After this, the whole deployment is a
 # single `docker compose up`.
 #
+# Scope: INFRA ONLY — Docker, the shared network, the reverse proxy, the
+# self-hosted runner containers, and the reconcile loop. App runtime config
+# (Mongo URI, JWT secret, ...) is NOT handled here: each app repo ships its own
+# .env.example which you copy to .env in the app's clone and fill in.
+#
 #   curl -fsSL https://raw.githubusercontent.com/Warehouse-USAL/wh-autodeploys/master/scripts/init.sh | bash
 set -euo pipefail
 
 ORG=Warehouse-USAL
 ROOT="${WH_ROOT:-/opt/wh}"
+
+# 0. Sanity: the images are built for amd64 — a different arch won't run them.
+arch=$(uname -m)
+if [ "$arch" != "x86_64" ]; then
+  echo "WARNING: this box is '$arch', but the images are amd64 — they will NOT run here." >&2
+  if [ "${ALLOW_NON_X86:-0}" != "1" ]; then
+    echo "         Set ALLOW_NON_X86=1 to proceed anyway." >&2
+    exit 1
+  fi
+fi
 
 # 1. Host dependencies: Docker engine, the compose plugin, and make.
 command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
@@ -36,7 +51,7 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-# 4. Bring up caddy + the two runners + reconcile
+# 4. Bring up caddy + the runners + reconcile
 docker network create wh-proxy 2>/dev/null || true
 docker compose up -d --build
 

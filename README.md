@@ -12,8 +12,8 @@ a self-hosted runner here).
 
 | Service | Purpose |
 |---|---|
-| `caddy` | Reverse proxy — the **single exposed port** (:80), `/api/*` → backend, `/` → dashboard. |
-| `runner-backend` / `runner-dashboard` | Self-hosted GitHub Actions runners. Self-register from a PAT, long-poll GitHub **outbound**, and deploy via the host Docker daemon (docker.sock mounted). |
+| `caddy` | Reverse proxy — the **single exposed port** (:80). `/app/*` → webapp, `/dashboard/*` → dashboard (both prefix-stripped), everything else (`/auth`, `/products`, `/ws`, `/`) → backend at root. |
+| `runner-backend` / `runner-dashboard` / `runner-webapp` | Self-hosted GitHub Actions runners. Self-register from a PAT, long-poll GitHub **outbound**, and deploy via the host Docker daemon (docker.sock mounted). |
 | `reconcile` | Clones missing app repos and, on a loop, converges each to its latest release. Safety net for first boot, long power-offs, and drift. |
 
 The runners use **Docker-out-of-Docker**: they mount `/var/run/docker.sock` and
@@ -35,14 +35,19 @@ See `.env.example` for the infra secrets (just `GH_OWNER` + a `GH_PAT` with
 copied from the repo's shipped `.env.example`:
 
 ```bash
-cp /opt/wh/wh-backend/.env.example /opt/wh/wh-backend/.env   # Mongo URI, JWT, ...
-cp /opt/wh/Dashboard/.env.example  /opt/wh/Dashboard/.env    # BACKEND_URL=/api
+cp /opt/wh/wh-backend/.env.example        /opt/wh/wh-backend/.env         # Mongo URI, JWT, ...
+cp /opt/wh/Dashboard/.env.example         /opt/wh/Dashboard/.env          # no BACKEND_URL needed
+cp /opt/wh/smarthouse_webapp/.env.example /opt/wh/smarthouse_webapp/.env  # no BACKEND_URL needed
 ```
+
+The two frontends call the backend with bare paths (`/auth`, `/products`, ...)
+which the Caddy proxy routes to the backend at root — so neither needs a
+`BACKEND_URL`.
 
 ## How a deploy flows
 
 1. App CI builds an image, pushes it to GHCR on a stable release.
-2. `release: published` → that repo's `deploy.yml` runs on its runner container here.
+2. The release triggers that repo's `deploy.yml` on its runner container here.
 3. The job logs into GHCR and runs `make deploy` → `docker compose pull && up -d <svc>`
    against the host daemon, recreating only that service.
 4. If the box was off and missed releases, `reconcile` converges it on next boot.
