@@ -61,9 +61,11 @@ echo "Up. The runners will appear under each repo's Settings -> Actions -> Runne
 echo "Once the apps have a .env and a release, they deploy automatically."
 echo "  Web app   : http://$ip/app/"
 echo "  Dashboard : http://$ip/dashboard/"
+echo "  Suggestions: http://$ip/suggestions/"
 echo "  API       : http://$ip/  (backend at root)"
 echo
 echo "App config still lives per-repo:"
 echo "  cp $ROOT/wh-backend/.env.example        $ROOT/wh-backend/.env        && edit it"
 echo "  cp $ROOT/Dashboard/.env.example         $ROOT/Dashboard/.env         && edit it"
 echo "  cp $ROOT/smarthouse_webapp/.env.example $ROOT/smarthouse_webapp/.env && edit it"
+echo "  cp $ROOT/wh-suggestions/.env.example    $ROOT/wh-suggestions/.env    && edit it"

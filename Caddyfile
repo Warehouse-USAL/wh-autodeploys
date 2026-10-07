@@ -5,6 +5,7 @@
 # Routing:
 #   /app/*        -> web app   (smarthouse_webapp)
 #   /dashboard/*  -> dashboard
+#   /suggestions/* -> suggestions service (wh-suggestions, Go)
 #   everything else (/auth, /products, /ws, /actuator, /, ...) -> backend
 #
 # The two SPAs are served under a path prefix, which Caddy strips (handle_path)
@@ -25,6 +26,11 @@
 	# Dashboard under /dashboard — prefix stripped; SPA built with base '/dashboard/'.
 	handle_path /dashboard/* {
 		reverse_proxy dashboard:80
+	}
+
+	# Suggestions service under /suggestions — prefix stripped.
+	handle_path /suggestions/* {
+		reverse_proxy suggestions:8080
 	}
 
 	# Everything else → the backend at root. Catches the frontends' bare API

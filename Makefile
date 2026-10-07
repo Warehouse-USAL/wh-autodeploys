@@ -1,4 +1,4 @@
-.PHONY: help up down logs reconcile redeploy redeploy-backend redeploy-dashboard redeploy-webapp
+.PHONY: help up down logs reconcile redeploy redeploy-backend redeploy-dashboard redeploy-webapp redeploy-suggestions
 
 .DEFAULT_GOAL := help
 
@@ -36,4 +36,7 @@ redeploy-dashboard: ## Trigger a production redeploy of the dashboard
 redeploy-webapp: ## Trigger a production redeploy of the web app
 	$(call _dispatch,smarthouse_webapp)
 
-redeploy: redeploy-backend redeploy-dashboard redeploy-webapp ## Trigger a redeploy of all services
+redeploy-suggestions: ## Trigger a production redeploy of the suggestions service
+	$(call _dispatch,wh-suggestions)
+
+redeploy: redeploy-backend redeploy-dashboard redeploy-webapp redeploy-suggestions ## Trigger a redeploy of all services
