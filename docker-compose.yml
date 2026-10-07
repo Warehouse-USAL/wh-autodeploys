@@ -29,6 +29,7 @@ services:
       RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-backend
       LABELS: ${RUNNER_LABELS:-prod}
       RUNNER_WORKDIR: /opt/wh/_work/wh-backend
+      DISABLE_AUTO_UPDATE: "true"  # runner's self-update corrupts its own bin/ on this box
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/wh:/opt/wh
@@ -43,6 +44,7 @@ services:
       RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-dashboard
       LABELS: ${RUNNER_LABELS:-prod}
       RUNNER_WORKDIR: /opt/wh/_work/Dashboard
+      DISABLE_AUTO_UPDATE: "true"  # runner's self-update corrupts its own bin/ on this box
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/wh:/opt/wh
@@ -57,6 +59,7 @@ services:
       RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-webapp
       LABELS: ${RUNNER_LABELS:-prod}
       RUNNER_WORKDIR: /opt/wh/_work/smarthouse_webapp
+      DISABLE_AUTO_UPDATE: "true"  # runner's self-update corrupts its own bin/ on this box
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/wh:/opt/wh
@@ -71,6 +74,7 @@ services:
       RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-suggestions
       LABELS: ${RUNNER_LABELS:-prod}
       RUNNER_WORKDIR: /opt/wh/_work/wh-suggestions
+      DISABLE_AUTO_UPDATE: "true"  # runner's self-update corrupts its own bin/ on this box
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/wh:/opt/wh
@@ -85,6 +89,7 @@ services:
       RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-mobile
       LABELS: ${RUNNER_LABELS:-prod}
       RUNNER_WORKDIR: /opt/wh/_work/SmartWarehouse
+      DISABLE_AUTO_UPDATE: "true"  # runner's self-update corrupts its own bin/ on this box
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/wh:/opt/wh
