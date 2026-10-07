@@ -12,8 +12,8 @@ a self-hosted runner here).
 
 | Service | Purpose |
 |---|---|
-| `caddy` | Reverse proxy — the **single exposed port** (:80). `/app/*` → webapp, `/dashboard/*` → dashboard (both prefix-stripped), everything else (`/auth`, `/products`, `/ws`, `/`) → backend at root. |
-| `runner-backend` / `runner-dashboard` / `runner-webapp` | Self-hosted GitHub Actions runners. Self-register from a PAT, long-poll GitHub **outbound**, and deploy via the host Docker daemon (docker.sock mounted). |
+| `caddy` | Reverse proxy — the **single exposed port** (:80). `/app/*` → webapp, `/dashboard/*` → dashboard, `/suggestions/*` → suggestions service (all prefix-stripped), everything else (`/auth`, `/products`, `/ws`, `/`) → backend at root. |
+| `runner-backend` / `runner-dashboard` / `runner-webapp` / `runner-suggestions` | Self-hosted GitHub Actions runners. Self-register from a PAT, long-poll GitHub **outbound**, and deploy via the host Docker daemon (docker.sock mounted). |
 | `reconcile` | Clones missing app repos and, on a loop, converges each to its latest release. Safety net for first boot, long power-offs, and drift. |
 
 The runners use **Docker-out-of-Docker**: they mount `/var/run/docker.sock` and
@@ -38,6 +38,7 @@ copied from the repo's shipped `.env.example`:
 cp /opt/wh/wh-backend/.env.example        /opt/wh/wh-backend/.env         # Mongo URI, JWT, ...
 cp /opt/wh/Dashboard/.env.example         /opt/wh/Dashboard/.env          # no BACKEND_URL needed
 cp /opt/wh/smarthouse_webapp/.env.example /opt/wh/smarthouse_webapp/.env  # no BACKEND_URL needed
+cp /opt/wh/wh-suggestions/.env.example    /opt/wh/wh-suggestions/.env     # Kafka, Redis, JWT secret
 ```
 
 The two frontends call the backend with bare paths (`/auth`, `/products`, ...)
