@@ -76,6 +76,20 @@ services:
       - /opt/wh:/opt/wh
     restart: always
 
+  runner-mobile:
+    build: ./runner
+    environment:
+      RUNNER_SCOPE: repo
+      REPO_URL: https://github.com/${GH_OWNER:?set GH_OWNER}/SmartWarehouse
+      ACCESS_TOKEN: ${GH_PAT:?set GH_PAT}
+      RUNNER_NAME: ${RUNNER_NAME_PREFIX:-wh}-mobile
+      LABELS: ${RUNNER_LABELS:-prod}
+      RUNNER_WORKDIR: /opt/wh/_work/SmartWarehouse
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/wh:/opt/wh
+    restart: always
+
   # State-driven safety net: clones missing app repos, then on a loop converges
   # each to its latest release. Covers first boot, long power-offs, and drift.
   reconcile:

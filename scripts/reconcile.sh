@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="${WH_ROOT:-/opt/wh}"
 ORG="${GH_OWNER:-Warehouse-USAL}"
-APPS=(wh-backend Dashboard smarthouse_webapp wh-suggestions)
+APPS=(wh-backend Dashboard smarthouse_webapp wh-suggestions SmartWarehouse)
 
 # GHCR login so `docker compose pull` can fetch private images outside Actions.
 if [ -n "${GHCR_PAT:-}" ]; then

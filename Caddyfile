@@ -6,6 +6,7 @@
 #   /app/*        -> web app   (smarthouse_webapp)
 #   /dashboard/*  -> dashboard
 #   /suggestions/* -> suggestions service (wh-suggestions, Go)
+#   /mobile/*     -> mobile app web preview (SmartWarehouse)
 #   everything else (/auth, /products, /ws, /actuator, /, ...) -> backend
 #
 # The two SPAs are served under a path prefix, which Caddy strips (handle_path)
@@ -31,6 +32,12 @@
 	# Suggestions service under /suggestions — prefix stripped.
 	handle_path /suggestions/* {
 		reverse_proxy suggestions:8080
+	}
+
+	# Mobile app (Flutter web) under /mobile — prefix stripped; built with
+	# --base-href /mobile/app/. /mobile/ is a phone-frame preview page, /mobile/app/ the app.
+	handle_path /mobile/* {
+		reverse_proxy mobile:80
 	}
 
 	# Everything else → the backend at root. Catches the frontends' bare API
